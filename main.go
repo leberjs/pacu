@@ -7,15 +7,18 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type model struct {
 	cursor int
 	credentials
-	err      error
-	profiles []profile
-	selected int
+	err        error
+	focusIndex int
+	inputs     []textinput.Model
+	profiles   []profile
+	selected   int
 }
 
 type profile struct {
@@ -33,9 +36,64 @@ type errMsg struct{ err error }
 
 type profileMsg []profile
 
+type profileUpdateMsg struct{}
+
+type completeMsg struct{}
+
 const credentialPath = ".aws/credentials"
 
 func (e errMsg) Error() string { return e.err.Error() }
+
+func initialModel() model {
+	m := model{
+		selected: -1,
+		inputs:   make([]textinput.Model, 3),
+	}
+
+	var t textinput.Model
+	for i := range m.inputs {
+		t = textinput.New()
+		t.CharLimit = 128
+
+		switch i {
+		case 0:
+			t.Placeholder = "aws_access_key_id"
+			t.Focus()
+		case 1:
+			t.Placeholder = "aws_secret_access_key"
+		case 2:
+			t.Placeholder = "aws_session_token"
+		}
+
+		m.inputs[i] = t
+	}
+
+	return m
+}
+
+func (m *model) updateInputs(msg tea.Msg) tea.Cmd {
+	cmds := make([]tea.Cmd, len(m.inputs))
+
+	for i := range m.inputs {
+		m.inputs[i], cmds[i] = m.inputs[i].Update(msg)
+	}
+
+	return tea.Batch(cmds...)
+}
+
+func (m *model) updateSelectedProfile() {
+	p := m.profiles[m.selected]
+
+	p.credentials.key_id = m.inputs[0].Value()
+	p.credentials.secret_key = m.inputs[1].Value()
+	p.credentials.session_token = m.inputs[2].Value()
+
+	m.profiles[m.selected] = p
+}
+
+func quitCli() tea.Msg {
+    return completeMsg{}
+}
 
 func getProfiles() tea.Msg {
 	dn, err := os.UserHomeDir()
@@ -60,9 +118,9 @@ func getProfiles() tea.Msg {
 				if strings.HasPrefix(cl, "aws_access_key_id") {
 					p.credentials.key_id = assignCred(cl)
 				} else if strings.HasPrefix(cl, "aws_secret_access_key") {
-					p.credentials.key_id = assignCred(cl)
+					p.credentials.secret_key = assignCred(cl)
 				} else if strings.HasPrefix(cl, "aws_session_token") {
-					p.credentials.key_id = assignCred(cl)
+					p.credentials.session_token = assignCred(cl)
 				}
 			}
 			ps = append(ps, p)
@@ -70,6 +128,30 @@ func getProfiles() tea.Msg {
 	}
 
 	return profileMsg(ps)
+}
+
+func writeProfiles(m model) {
+	dn, err := os.UserHomeDir()
+	path := filepath.Join(dn, credentialPath)
+
+	f, err := os.Create(path)
+	if err != nil {
+		m.err = err
+		tea.Quit()
+	} else {
+		var s string
+		for _, p := range m.profiles {
+			s += "[" + p.name + "]\n"
+			s += "aws_access_key_id = " + p.credentials.key_id + "\n"
+			s += "aws_secret_access_key = " + p.credentials.secret_key + "\n"
+			if p.credentials.session_token != "" {
+				s += "aws_session_token = " + p.credentials.session_token + "\n"
+			}
+			s += "\n"
+		}
+
+		f.WriteString(s)
+	}
 }
 
 func assignCred(s string) string {
@@ -91,6 +173,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case profileMsg:
 		m.profiles = msg
 
+	case completeMsg:
+        return m, tea.Quit
+
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -106,10 +191,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.cursor < len(m.profiles)-1 {
 				m.cursor++
 			}
+
+		case "enter":
+			if m.selected < 0 {
+				m.selected = m.cursor
+			} else {
+				if m.focusIndex == len(m.inputs)-1 {
+					m.updateSelectedProfile()
+					writeProfiles(m)
+                    return m, quitCli
+				} else {
+					m.inputs[m.focusIndex].Blur()
+					m.focusIndex++
+					m.inputs[m.focusIndex].Focus()
+				}
+			}
 		}
 	}
 
-	return m, nil
+	cmd := m.updateInputs(msg)
+
+	return m, cmd
 }
 
 func (m model) View() string {
@@ -119,21 +221,28 @@ func (m model) View() string {
 
 	s := ""
 
-	if m.selected > -1 {
-		s = "I selected something!\n"
-	}
-
 	if len(m.profiles) == 0 {
 		s = fmt.Sprintln("Grabbing profiles ... ")
 	} else {
 		s = ""
 		for i, p := range m.profiles {
-            cursor := " "
+			cursor := " "
 			if m.cursor == i {
-			    cursor = "*"
+				cursor = "*"
 			}
 			s += fmt.Sprintf("%s  %s\n", cursor, p.name)
 		}
+	}
+
+	if m.selected > -1 {
+		s = ""
+		for i := range m.inputs {
+			s += m.inputs[i].View()
+			if i < len(m.inputs)-1 {
+				s += "\n"
+			}
+		}
+		s += "\n"
 	}
 
 	s += "\nCtrl+C to quit\n"
@@ -143,7 +252,7 @@ func (m model) View() string {
 }
 
 func main() {
-	p := tea.NewProgram(model{})
+	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 		log.Fatal(err)
 	}
