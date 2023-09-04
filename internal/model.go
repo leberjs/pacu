@@ -60,7 +60,7 @@ func NewModel() Model {
 	var t textinput.Model
 	for i := range m.InputState.inputs {
 		t = textinput.New()
-        t.Prompt = ""
+		t.Prompt = ""
 		t.CharLimit = 128
 
 		switch i {
@@ -159,13 +159,13 @@ func (m Model) View() string {
 		return fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err)
 	}
 
-    var s string
+	var s string
 
-    if m.ProfileState.selectedIndex == -1 {
-        s = choicesView(m)
-    } else {
-        s = credentialEditView(m)
-    }
+	if m.ProfileState.selectedIndex == -1 {
+		s = choicesView(m)
+	} else {
+		s = credentialEditView(m)
+	}
 
 	s += "\nCtrl+C to quit\n"
 

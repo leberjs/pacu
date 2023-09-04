@@ -8,7 +8,7 @@ func (e errMsg) Error() string { return e.err.Error() }
 // Profile
 type profileFetchMsg []profile
 
-type profileSelectedMsg struct {}
+type profileSelectedMsg struct{}
 
 // I/O
-type credentialsFileWrittenMsg struct {}
+type credentialsFileWrittenMsg struct{}
