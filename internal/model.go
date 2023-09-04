@@ -60,6 +60,7 @@ func NewModel() Model {
 	var t textinput.Model
 	for i := range m.InputState.inputs {
 		t = textinput.New()
+        t.Prompt = ""
 		t.CharLimit = 128
 
 		switch i {
