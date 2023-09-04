@@ -158,31 +158,13 @@ func (m Model) View() string {
 		return fmt.Sprintf("\nWe had some trouble: %v\n\n", m.err)
 	}
 
-	s := ""
+    var s string
 
-	if len(m.profiles) == 0 {
-		s = fmt.Sprintln("Grabbing profiles ... ")
-	} else {
-		s = ""
-		for i, p := range m.profiles {
-			cursor := " "
-			if m.cursor == i {
-				cursor = "*"
-			}
-			s += fmt.Sprintf("%s  %s\n", cursor, p.name)
-		}
-	}
-
-	if m.ProfileState.selectedIndex > -1 {
-		s = ""
-		for i := range m.inputs {
-			s += m.inputs[i].View()
-			if i < len(m.inputs)-1 {
-				s += "\n"
-			}
-		}
-		s += "\n"
-	}
+    if m.ProfileState.selectedIndex == -1 {
+        s = choicesView(m)
+    } else {
+        s = credentialEditView(m)
+    }
 
 	s += "\nCtrl+C to quit\n"
 
