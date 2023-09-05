@@ -71,6 +71,7 @@ func NewModel() Model {
 			t.Placeholder = "aws_secret_access_key"
 		case 2:
 			t.Placeholder = "aws_session_token"
+            t.CharLimit = 1024
 		}
 
 		m.inputs[i] = t
